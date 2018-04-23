@@ -117,7 +117,7 @@ int main(int argc,char *argv[]) {
 					case 'r': // ROM 読み込んでファイルに書き込み
 						mode = READ;
 
-						fd = open(argv[++i], O_WRONLY | O_CREAT);
+						fd = open(argv[++i], O_WRONLY | O_CREAT, 0755);
 						if (fd == -1) {
 							printf("file open error!!\n");
 							exit(EXIT_FAILURE);
@@ -292,6 +292,7 @@ int main(int argc,char *argv[]) {
 			m->seqRead(0, (uint16_t *)buffer, len/2);
 			write(fd, buffer, len);
 			close(fd);
+			fclose(fp);
 			printf("read finish\n"); 
 		}
 		else if(mode == DUMP){
@@ -330,6 +331,8 @@ int main(int argc,char *argv[]) {
 			printf("WRITE START =>\n");
 			m->seqProgram(0, (uint16_t *)buffer, len/2);
 			printf("write finish!\n");
+			close(fd);
+			fclose(fp);
 		}
 
 		else if(mode == DUPLICATE)
@@ -364,6 +367,8 @@ int main(int argc,char *argv[]) {
 					error_num++;
 				}
 			}
+			close(fd);
+			fclose(fp);
 			printf("verify finish!\n");
 			printf("error_num:%d\n",error_num);
 		}
@@ -432,6 +437,7 @@ int main(int argc,char *argv[]) {
 				b->read(i, &buf[i]);
 			write(fd, buf, 32*1024);
 			close(fd);
+			fclose(fp);
 			printf("read finish\n"); 
 		}
 		else if(mode == WRITE){
