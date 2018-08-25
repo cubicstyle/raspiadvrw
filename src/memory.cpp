@@ -78,10 +78,11 @@ class MemoryCubicFlash : public MemoryRom{
       uint16_t dev_code[4];
       getChipId(dev_code);
 
-       //for(int i=0; i<4; i++) {
-       //  printf("dev code %d: %04x\n", i, dev_code[i]);
-      // }
-
+#ifdef __DEBUG__
+      for(int i=0; i<4; i++) {
+        printf("dev code %d: %04x\n", i, dev_code[i]);
+      }
+#endif
       // mx29gl256
       if((dev_code[0] & 0xff) == 0xC2 && dev_code[1] == 0x227E 
             && dev_code[2] == 0x2222 && dev_code[3] == 0x2201){
@@ -339,8 +340,10 @@ class MemoryF2aFlash : public MemoryRom{
         uint16_t dev_code[3];
         getChipId(dev_code);
 
-        //for(int i=0; i<3; i++)
-        //    printf("dev code %d: %04x\n", i, dev_code[i]);
+#ifdef __DEBUG__
+        for(int i=0; i<3; i++)
+            printf("dev code %d: %04x\n", i, dev_code[i]);
+#endif
 
         if(dev_code[0] == 0x0089 && ( (dev_code[1] >= 0x16 && dev_code[1] <= 0x18) 
                                       || (dev_code[2] >= 0x16 && dev_code[2] <= 0x18) ) )
@@ -562,7 +565,9 @@ int32_t MemoryRom::checkGbaHeader()
     Header *header = (Header *)buffer;
     
     if(gen_crc16(header->logo, sizeof(header->logo)) != LOGO_CRC){
-      //printf(" Header n logo not match!\n");
+#ifdef __DEBUG__
+      printf(" Header n logo not match!\n");
+#endif
       return -1;
     }
     return 1;
@@ -672,8 +677,10 @@ class MemoryBackupCubic : public MemoryBackup{
         uint8_t dev_code[2];
         getChipId(dev_code);
 
-        //for(int i=0; i<2; i++)
-        //    printf("dev code %d: %02x\n", i, dev_code[i]);
+#ifdef __DEBUG__
+        for(int i=0; i<2; i++)
+            printf("dev code %d: %02x\n", i, dev_code[i]);
+#endif
 
       if(dev_code[0]== 0xbf && (dev_code[1] == 0xd7 || dev_code[1] == 0xd6)){
         return 32;
