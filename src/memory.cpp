@@ -606,6 +606,10 @@ int32_t MemoryBackup::csf()
 
 class MemoryBackupSram : public MemoryBackup{
 	public:
+    MemoryBackupSram(){
+      kbyte = 32;
+      typstr = (char *)"Sram(Fram)";
+    }
 	static int32_t find(){
     MemoryBackup m;
     uint8_t t,t2;
@@ -625,15 +629,6 @@ class MemoryBackupSram : public MemoryBackup{
   }
 };
 
-class MemoryBackupFlash : public MemoryBackup{
-	public:
-	static int32_t find(){
-	}
-
-  int32_t getDeviceCode(uint16_t *code){
-      return -1;
-  }
-};
 
 class MemoryBackupEEPRom : public MemoryBackup{
 	public:
@@ -651,7 +646,8 @@ class MemoryBackupEEPRom : public MemoryBackup{
 class MemoryBackupCubic : public MemoryBackup{
 	public:
     MemoryBackupCubic(uint32_t backup_size){
-      kbit = backup_size;
+      kbyte = backup_size;
+      typstr = (char *)"Cubic Flash";
     }
 
     static int32_t getChipId(uint8_t *code){
@@ -689,7 +685,75 @@ class MemoryBackupCubic : public MemoryBackup{
   	}
 };
 
+// official cart backup flash
+class MemoryBackupFlash : public MemoryBackup{
+    private:
+        bool bank;
 
+    public:
+    MemoryBackupFlash(uint32_t backup_size){
+      bank = backup_size > 64 ? true : false;
+      kbyte = backup_size;
+      typstr = (char *)"Flash";
+    }
+
+    static int32_t getChipId(uint8_t *code){
+      MemoryBackup m;
+      m.write(0x5555, 0xaa);
+      m.write(0x2aaa, 0x55);
+      m.write(0x5555, 0x90);
+
+      // need CS ridging
+      m.csf();
+
+      // silicon code
+      m.read(0x0000, &code[0]);
+      // read Device code 1,2,3
+      m.read(0x0001, &code[1]);
+
+      // command reset
+      m.write(0x0000, 0x00f0);
+      return 4;
+    }
+
+    static int32_t find(){
+        uint8_t dev_code[2];
+        getChipId(dev_code);
+
+#ifdef __DEBUG__
+        for(int i=0; i<2; i++)
+            printf("dev code %d: %02x\n", i, dev_code[i]);
+#endif
+
+      // SST
+      if(dev_code[0]== 0xbf && dev_code[1] == 0xd4){
+        return 64;
+      }
+      // Macronix
+      else if(dev_code[0]== 0xc2 && dev_code[1] == 0x1c){
+        return 64;
+      }
+      // Panasonic
+      else if(dev_code[0]== 0x32 && dev_code[1] == 0x1b){
+        return 64;
+      }
+      // Atmel
+      else if(dev_code[0]== 0x1f && dev_code[1] == 0x3d){
+        return 64;
+      }
+      // Sanyo
+      else if(dev_code[0]== 0x62 && dev_code[1] == 0x13){
+        return 128;
+      }
+      // Macronix
+      else if(dev_code[0]== 0xc2 && dev_code[1] == 0x09){
+        return 128;
+      }
+
+      return -1;
+    }
+    
+};
 
 Memory* Memory::create(MEMORY_SELECT ms)
 {
@@ -713,6 +777,9 @@ Memory* Memory::create(MEMORY_SELECT ms)
     }
     else if((size = MemoryBackupCubic::find()) > 0){
       return (Memory *)new MemoryBackupCubic(size);
+    }
+    else if((size = MemoryBackupFlash::find()) > 0){
+      return (Memory *)new MemoryBackupFlash(size);
     }
     return nullptr;
   }

@@ -37,6 +37,27 @@ void exit_func2(){
 	exit(1);
 }
 
+void print_version(){
+	printf("Raspberry Pi ADVANCE Reader Writer v.%s\n",VERSION);
+	printf("Copyright (C) 2018 CUBIC STYLE\n\n");
+}
+
+void print_help(){
+	printf("rpa [-w gbarom] [-r dstfile] [-l size] [-L size(MB)]-c [-a address]\n");
+	printf("\t-c \t\t\tROM info\n");
+	printf("\t-r <filename> \t\tRead ROM\n");
+	printf("\t-w <filename> \t\tWrite ROM\n");
+	printf("\t-e \t\t\tblock erase\n");
+	printf("\t-E \t\t\tchip erase\n");	  
+	printf("\t-B \t\t\tBLANK check\n");
+	printf("\t-d \t\t\tdump\n");
+	printf("\t-a \t\t\trom address\n");
+	printf("\t-b \t\t\tblock address\n");
+	printf("\t-n \t\t\terase block num\n");
+	printf("\t-s \t\t\tSRAM(backup rom)\n");
+	printf("\t-h \t\t\tthis help\n\n");
+}
+
 bool nl_flag = false;
 void draw_progress(uint32_t p) {	// p:0-100
 	if(p > 100)
@@ -93,7 +114,15 @@ int main(int argc,char *argv[]) {
 			if(*argv[i] == '-'){
         		switch( *(argv[i]+1) ){
 					case 'w': // ファイル書き込み
-						mode = WRITE;
+					case 'V': // ROM VERIFY
+					case 'D': // Duplicate
+						if(*(argv[i]+1) == 'w')
+							mode = WRITE;
+						else if(*(argv[i]+1) == 'V')
+							mode = VERIFY;
+						else if(*(argv[i]+1) == 'D')
+							mode = DUPLICATE;
+
 						fd = open(argv[++i], O_RDONLY);
 						if (fd == -1) {
 							printf("file open error!!\n");
@@ -150,29 +179,6 @@ int main(int argc,char *argv[]) {
 					case 'e': // ROM block erase
 						mode = BLOCK_ERASE;
 						break;
-
-					case 'V': // ROM VERIFY
-						mode = VERIFY;
-						fd = open(argv[++i], O_RDONLY);
-						if (fd == -1) {
-							printf("file open error!!\n");
-							exit(EXIT_FAILURE);
-						}
-
-						fp = fdopen(fd, "rb");
-						if (fp == NULL) {
-							printf("file fdopen error!!\n");
-							exit(EXIT_FAILURE);
-						}
-
-						if (fstat(fd, &stbuf) == -1) {
-							printf("file fstat error!!\n");
-							exit(EXIT_FAILURE);
-						}
-						if(len==0)
-							len = stbuf.st_size;
-						break;
-
 					case 'E': // ROM chip erase
 						mode = CHIP_ERASE;
 						break;	  
@@ -196,11 +202,6 @@ int main(int argc,char *argv[]) {
 					case 's': // SRAM(backup rom)
 						backup = true;
 						break;
-
-					case 'D': // DUPLICATE SET 
-						mode = DUPLICATE;
-						break;
-
 					case 'B': // FLASH BLANK CHECK
 						mode = BLANK;
 						break;
@@ -210,24 +211,11 @@ int main(int argc,char *argv[]) {
 						break;
 
 					case 'h':
-						printf("rpa [-w gbarom] [-r dstfile] [-l size] [-L size(MB)]-c [-a address]\n");
-						printf("\t-c: ROM info\n");
-					  	printf("\t-r: Read ROM\n");
-	  					printf("\t-w: Write ROM\n");
-						printf("\t-e: block erase\n");
-						printf("\t-E: chip erase\n");	  
-						printf("\t-B: BLANK check\n");
-						printf("\t-d: dump\n");
-						printf("\t-a: rom address\n");
-						printf("\t-b: block address\n");
-						printf("\t-n: erase block num\n");
-						printf("\t-s: SRAM(backup rom)\n");
-						printf("\t-h: this help\n");
+						print_help();
 						exit(1);
 
 					case 'v':
-						printf("Raspberry Pi ADVANCE Reader Writer v.%s\n",VERSION);
-						printf("Copyright (C) 2018 CUBIC STYLE\n");
+						print_version();
 						exit(1);
 
 					default:
@@ -239,6 +227,9 @@ int main(int argc,char *argv[]) {
 	}
 
 	if ( mode == NONE ) {
+		print_version();
+		print_help();
+
 		mode = INFO;
 	}
 
@@ -248,20 +239,7 @@ int main(int argc,char *argv[]) {
 		else 
 			len = 32 * 1024;
 	}
-	if(len%2==1 && backup)
-		len++;
 
-	try{
-		buffer = new uint8_t[len];		
-		memset(buffer, 0, len);
-	}
-	catch (exception& e)
-	{
-		cout << e.what() << '\n';
-		printf("error : new error \n");
-		exit(1);
-	}
-  
 	atexit(exit_func2);
 	if (SIG_ERR == signal(SIGHUP, exit_func)) {
 		printf("failed to set sighup handler\n");
@@ -274,15 +252,29 @@ int main(int argc,char *argv[]) {
 
 	if(!backup)
 	{
-		printf("MAIN MEMORY:\n");
+		printf("Main ROM mode=>\n");
 		MemoryRom *m = (MemoryRom *)Memory::create();
 		if(m == nullptr){
 			printf("cartridge can not be detected or not supported.\n");
 			exit(1);
 		}
 
+		if(len%2==1)
+			len++;
+
+		try{
+			buffer = new uint8_t[len];
+			memset(buffer, 0, len);
+		}
+		catch (exception& e)
+		{
+			cout << e.what() << '\n';
+			printf("error : new error \n");
+			exit(1);
+		}
+
 		if(mode == INFO){
-			printf("Cart: %s\n", m->getTypeStr());
+			printf("Cartridge type: %s\n", m->getTypeStr());
 			if(m->getMemoryMbit() > 0)
 				printf("Size: %d Mbit\n", m->getMemoryMbit());
 		}
@@ -337,7 +329,47 @@ int main(int argc,char *argv[]) {
 
 		else if(mode == DUPLICATE)
 		{
+			// ERASE
+			printf("CHIP ERASE START =>\n");
+			ret = m->chipErase();
+			printf("chip erase finish!(%d)\n",ret);
 
+			// WRITE
+			len = fread( buffer, sizeof( unsigned char ), len, fp );
+			//printf("\nfread : %d\n",len);
+			printf("WRITE START =>\n");
+			m->seqProgram(0, (uint16_t *)buffer, len/2);
+			printf("write finish!\n");
+
+			// VERIFY
+			printf("VERIFY START =>\n");
+			uint8_t * buffer2, b[2];		
+			uint32_t error_num = 0;
+			try{
+				buffer2 = new uint8_t[len];
+				m->seqRead(0, (uint16_t *)buffer2, len/2);
+			}
+			catch(char *str) {
+				printf("%s\n",str);
+			}
+
+			for(i=0; i<len; i++){
+				if(buffer[i] != buffer2[i]){
+				// byteRead で再度チェック
+				// todo: f2a カートはsecRead で 0x220000 と 0xfe0000 付近で値がバグることがある
+					m->read(i/2, (uint16_t *)b);
+					if(( b[i%2] & 0xff) == buffer[i] )
+						continue;
+
+					if(error_num < 32)
+						printf("%6x: %02x != %02x (rom)\n", i , buffer[i], buffer2[i] );
+					error_num++;
+				}
+			}
+			close(fd);
+			fclose(fp);
+			printf("verify finish!\n");
+			printf("error_num:%d\n",error_num);
 		}
 
 		else if(mode == VERIFY)
@@ -409,16 +441,27 @@ int main(int argc,char *argv[]) {
 		else if(mode == TEST)
 		{
 
-
 		}
-
-
 	}
 	else if(backup){
-		printf("BACKUP MEMORY:\n");
+		printf("Backup memory mode=>\n");
 		MemoryBackup *b = (MemoryBackup *)Memory::create(MEM_BACKUP);
 		if(b == nullptr){
 			printf("cartridge can not be detected or not supported.\n");
+			exit(1);
+		}
+		printf("Memory type: %s\n", b->getTypeStr());
+		printf("Size: %d KB\n", b->getMemoryKb());
+
+		try{
+			len = b->getMemoryKb() * 1024;
+			buffer = new uint8_t[len];
+			memset(buffer, 0, len);
+		}
+		catch (exception& e)
+		{
+			cout << e.what() << '\n';
+			printf("error : new error \n");
 			exit(1);
 		}
 
@@ -433,9 +476,9 @@ int main(int argc,char *argv[]) {
 		else if(mode == READ){
 			printf("READ START=>\n");
 			uint8_t *buf = (uint8_t *)buffer;
-			for(i=0; i<32*1024; i++)
+			for(i=0; i<len; i++)
 				b->read(i, &buf[i]);
-			write(fd, buf, 32*1024);
+			write(fd, buf, len);
 			close(fd);
 			fclose(fp);
 			printf("read finish\n"); 
@@ -443,7 +486,7 @@ int main(int argc,char *argv[]) {
 		else if(mode == WRITE){
 			printf("WRITE START=>\n");
 			uint8_t *buf = (uint8_t *)buffer;
-			len = fread( buf, sizeof( unsigned char ), 32*1024, fp );
+			len = fread( buf, sizeof( unsigned char ), len, fp );
 			//printf("\nfread : %d\n",len);
 			printf("WRITE START =>\n");
 			for(i=0; i<len; i++)

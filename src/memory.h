@@ -89,15 +89,23 @@ class MemoryRom : public Memory{
 // BackupROMの基底クラス
 class MemoryBackup : public Memory{
     protected:
-        uint32_t kbit; //memory size Kbit
-
+        uint32_t kbyte; //memory size Kbit
+        char* typstr;
     public:
         virtual int32_t write(uint32_t badd, uint8_t dat);
         virtual int32_t read(uint32_t badd, uint8_t *dat);
         virtual int32_t csf();
 
+        char * getTypeStr(){
+            return typstr;
+        };
+
+        uint32_t getMemoryKb(){
+            return kbyte;
+        };
+
         MemoryBackup(){
-            kbit = 0;
+            kbyte = 0;
             gpio.init(MEM_BACKUP);
         }
 };
