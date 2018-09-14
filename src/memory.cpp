@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <wiringPi.h>
 #include "memory.h"
 #include "gpio.h"
@@ -596,19 +597,24 @@ int32_t MemoryBackup::write(uint32_t badd, uint8_t dat)
   return 1;
 }
 
+int32_t MemoryBackup::load(uint32_t badd, uint8_t *dat, uint32_t len){
+  for(int i=0; i<len; i++)
+    read(badd + i, &dat[i]);
+  return len;
+}
+
 int32_t MemoryBackup::csf()
 {
   gpio.csFalling();
   return 1;
 }
 
-
-
 class MemoryBackupSram : public MemoryBackup{
 	public:
     MemoryBackupSram(){
       kbyte = 32;
       typstr = (char *)"Sram(Fram)";
+      type = SRAM;
     }
 	static int32_t find(){
     MemoryBackup m;
@@ -626,6 +632,19 @@ class MemoryBackupSram : public MemoryBackup{
 
   int32_t getDeviceCode(uint16_t *code){
       return -1;
+  }
+
+  int32_t save(uint32_t badd, uint8_t *dat, uint32_t len){
+      for(int i=0; i<len; i++)
+        write(badd + i, dat[i]);
+      return len;
+  }
+
+  int32_t chipErase(){
+    uint32_t len = kbyte * 1024;
+    uint8_t *tmp = new uint8_t[len];
+    memset(tmp, 0xff, len);
+    save(0, tmp, len);
   }
 };
 
@@ -648,6 +667,7 @@ class MemoryBackupCubic : public MemoryBackup{
     MemoryBackupCubic(uint32_t backup_size){
       kbyte = backup_size;
       typstr = (char *)"Cubic Flash";
+      type = FLASH_CUBIC;
     }
 
     static int32_t getChipId(uint8_t *code){
@@ -683,6 +703,46 @@ class MemoryBackupCubic : public MemoryBackup{
       }
       return -1;
   	}
+  int32_t save(uint32_t badd, uint8_t *dat, uint32_t len){
+      uint8_t tmp;
+      uint32_t time_over = 5;
+      for(int i=0; i<len; i++){
+        write(0x5555, 0xaa);
+        write(0x2aaa, 0x55);
+        write(0x5555, 0xa0);
+        write(badd + i, dat[i]);
+
+        while(time_over--){
+          delayMicroseconds(20); // Byte-Program Time max:20us
+          read(badd + i, &tmp);
+          if( dat[i] ==  tmp)
+            break;
+        }
+      }
+      // command reset
+      write(0x0000, 0x00f0);
+      return 1;
+  }
+
+  int32_t chipErase(){
+      uint8_t tmp;
+      uint32_t time_over = 5;
+      write(0x5555, 0xaa);
+      write(0x2aaa, 0x55);
+      write(0x5555, 0x80);
+      write(0x5555, 0xaa);
+      write(0x2aaa, 0x55);
+      write(0x5555, 0x10);
+
+      while(time_over--){
+          delay(100);
+          read(0x00, &tmp);
+          if( 0xff ==  tmp)
+            break;
+      }
+
+      return 1;
+  }
 };
 
 // official cart backup flash
@@ -695,6 +755,7 @@ class MemoryBackupFlash : public MemoryBackup{
       bank = backup_size > 64 ? true : false;
       kbyte = backup_size;
       typstr = (char *)"Flash";
+      type = FLASH;
     }
 
     static int32_t getChipId(uint8_t *code){
@@ -752,8 +813,76 @@ class MemoryBackupFlash : public MemoryBackup{
 
       return -1;
     }
-    
+
+  int32_t save(uint32_t badd, uint8_t *dat, uint32_t len){
+      uint8_t tmp;
+      uint32_t time_over = 10;
+      for(int i=0; i<len; i++){
+        write(0x5555, 0xaa);
+        write(0x2aaa, 0x55);
+        write(0x5555, 0xa0);
+        write(badd + i, dat[i]);
+
+        while(time_over--){
+          delayMicroseconds(20);
+          read(badd + i, &tmp);
+          if( dat[i] == tmp)
+            break;
+        }
+      }
+      // command reset
+      write(0x0000, 0x00f0);
+  }
+
+  int32_t chipErase(){
+      uint8_t tmp;
+      uint32_t time_over = 5;
+      write(0x5555, 0xaa);
+      write(0x2aaa, 0x55);
+      write(0x5555, 0x80);
+      write(0x5555, 0xaa);
+      write(0x2aaa, 0x55);
+      write(0x5555, 0x10);
+
+      while(time_over--){
+          delay(200);
+          read(0x00, &tmp);
+          if( 0xff ==  tmp)
+            break;
+      }
+
+      return 1;
+  }
 };
+
+
+class MemoryBackupFlashAtmel : public MemoryBackupFlash{
+    public:
+    MemoryBackupFlashAtmel(uint32_t backup_size) : MemoryBackupFlash (backup_size){
+    }
+
+    static int32_t find(){
+        uint8_t dev_code[2];
+        getChipId(dev_code);
+
+#ifdef __DEBUG__
+        for(int i=0; i<2; i++)
+            printf("dev code %d: %02x\n", i, dev_code[i]);
+#endif
+
+      // Atmel
+      if(dev_code[0]== 0x1f && dev_code[1] == 0x3d){
+        return 64;
+      }
+
+      return -1;
+    }
+
+  int32_t chipErase(){
+      return -1;
+  }
+};
+
 
 Memory* Memory::create(MEMORY_SELECT ms)
 {

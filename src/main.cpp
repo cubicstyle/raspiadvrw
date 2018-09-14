@@ -20,7 +20,7 @@
 #include "gpio.h"
 #include "memory.h"
 
-#define VERSION "1.00"
+#define VERSION "1.10"
 
 using namespace std;
 
@@ -476,8 +476,7 @@ int main(int argc,char *argv[]) {
 		else if(mode == READ){
 			printf("READ START=>\n");
 			uint8_t *buf = (uint8_t *)buffer;
-			for(i=0; i<len; i++)
-				b->read(i, &buf[i]);
+			b->load(0, buf, len);
 			write(fd, buf, len);
 			close(fd);
 			fclose(fp);
@@ -489,13 +488,65 @@ int main(int argc,char *argv[]) {
 			len = fread( buf, sizeof( unsigned char ), len, fp );
 			//printf("\nfread : %d\n",len);
 			printf("WRITE START =>\n");
-			for(i=0; i<len; i++)
-				b->write(i, buf[i]);
+			b->save(0, buf, len);
 			printf("write finish!\n");
+		}
+		else if(mode == CHIP_ERASE){
+			printf("CHIP ERASE START =>\n");
+			ret = b->chipErase();
+			printf("chip erase finish!(%d)\n",ret);
 		}
 		else if(mode == TEST)
 		{
+			printf("BACKUP MEMORY TEST START=>\n");
+			int32_t error=0;
+			uint8_t *buf = (uint8_t *)buffer;
+			// ERASE TEST
+			b->chipErase();
+			b->load(0, buf, len);
+			for(i=0; i<len; i++){
+				if(buf[i] != 0xff){
+					if(error++ < 32)
+						printf("%04x: %02x != 0xff\n", i , buf[i]);
+				}
+			}
+			printf("BLANK TEST error:%d\n", error);
+			if(error > 0)
+				goto end;
 
+			// WRITE TEST 0xAA
+			for(i=0; i<len; i++)
+				buf[i] = 0xaa;
+			b->save(0, buf, len);
+			for(i=0; i<len; i++){
+				if(buf[i] != 0xaa){
+					if(error++ < 32)
+						printf("%04x: %02x != 0xff\n", i , buf[i]);
+				}
+			}
+			printf("WRITE 0xAA TEST error:%d\n", error);
+			if(error > 0)
+				goto end;
+
+
+			// WRITE TEST 0x55
+			b->chipErase();
+			for(i=0; i<len; i++)
+				buf[i] = 0x55;
+			b->save(0, buf, len);
+			for(i=0; i<len; i++){
+				if(buf[i] != 0x55){
+					if(error++ < 32)
+						printf("%04x: %02x != 0xff\n", i , buf[i]);
+				}
+			}
+			printf("WRITE 0x55 TEST error:%d\n", error);
+			if(error > 0)
+				goto end;
+
+			b->chipErase();
+
+			printf("BACKUP MEMOEY TEST is Sucess\n");
 		}
 	}
 

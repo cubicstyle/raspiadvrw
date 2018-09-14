@@ -86,18 +86,35 @@ class MemoryRom : public Memory{
         }
 };
 
+enum EBackupType{
+    BACKUP_NONE, SRAM, FLASH, FLASH_LARGE, EEPROM, FLASH_CUBIC
+};
+
 // BackupROMの基底クラス
 class MemoryBackup : public Memory{
     protected:
         uint32_t kbyte; //memory size Kbit
         char* typstr;
+        EBackupType type;
+
     public:
         virtual int32_t write(uint32_t badd, uint8_t dat);
         virtual int32_t read(uint32_t badd, uint8_t *dat);
         virtual int32_t csf();
+        virtual int32_t save(uint32_t badd, uint8_t *dat, uint32_t len){
+            return -1;  
+        }
+        virtual int32_t load(uint32_t badd, uint8_t *dat, uint32_t len);
 
+        virtual int32_t chipErase(){
+            return -1;
+        };
         char * getTypeStr(){
             return typstr;
+        };
+
+        EBackupType getType(){
+            return type;
         };
 
         uint32_t getMemoryKb(){
@@ -107,6 +124,8 @@ class MemoryBackup : public Memory{
         MemoryBackup(){
             kbyte = 0;
             gpio.init(MEM_BACKUP);
+            typstr = (char *)"NONE";
+            type = BACKUP_NONE;
         }
 };
 
