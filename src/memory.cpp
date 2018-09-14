@@ -598,8 +598,12 @@ int32_t MemoryBackup::write(uint32_t badd, uint8_t dat)
 }
 
 int32_t MemoryBackup::load(uint32_t badd, uint8_t *dat, uint32_t len){
-  for(int i=0; i<len; i++)
+  for(int i=0; i<len; i++){
     read(badd + i, &dat[i]);
+    if(i%0x800==0)
+        draw_progress(  i * 100 / len  );
+  }
+  draw_progress(100);
   return len;
 }
 
@@ -635,8 +639,12 @@ class MemoryBackupSram : public MemoryBackup{
   }
 
   int32_t save(uint32_t badd, uint8_t *dat, uint32_t len){
-      for(int i=0; i<len; i++)
+      for(int i=0; i<len; i++){
         write(badd + i, dat[i]);
+        if(i%0x800==0)
+            draw_progress(  i * 100 / len  );
+      }
+      draw_progress( 100 );
       return len;
   }
 
@@ -718,7 +726,10 @@ class MemoryBackupCubic : public MemoryBackup{
           if( dat[i] ==  tmp)
             break;
         }
+        if(i%0x800==0)
+            draw_progress( i * 100 / len  );
       }
+      draw_progress( 100 );
       // command reset
       write(0x0000, 0x00f0);
       return 1;
@@ -747,12 +758,8 @@ class MemoryBackupCubic : public MemoryBackup{
 
 // official cart backup flash
 class MemoryBackupFlash : public MemoryBackup{
-    private:
-        bool bank;
-
     public:
     MemoryBackupFlash(uint32_t backup_size){
-      bank = backup_size > 64 ? true : false;
       kbyte = backup_size;
       typstr = (char *)"Flash";
       type = FLASH;
@@ -798,18 +805,6 @@ class MemoryBackupFlash : public MemoryBackup{
       else if(dev_code[0]== 0x32 && dev_code[1] == 0x1b){
         return 64;
       }
-      // Atmel
-      else if(dev_code[0]== 0x1f && dev_code[1] == 0x3d){
-        return 64;
-      }
-      // Sanyo
-      else if(dev_code[0]== 0x62 && dev_code[1] == 0x13){
-        return 128;
-      }
-      // Macronix
-      else if(dev_code[0]== 0xc2 && dev_code[1] == 0x09){
-        return 128;
-      }
 
       return -1;
     }
@@ -829,7 +824,10 @@ class MemoryBackupFlash : public MemoryBackup{
           if( dat[i] == tmp)
             break;
         }
+        if(i%0x800==0)
+          draw_progress( i * 100 / len  );
       }
+      draw_progress(100);
       // command reset
       write(0x0000, 0x00f0);
   }
@@ -883,6 +881,92 @@ class MemoryBackupFlashAtmel : public MemoryBackupFlash{
   }
 };
 
+class MemoryBackupFlashLarge : public MemoryBackupFlash{
+    public:
+    MemoryBackupFlashLarge(uint32_t backup_size) : MemoryBackupFlash (backup_size){
+    }
+
+    int32_t bank_num=0;
+
+    static int32_t find(){
+        uint8_t dev_code[2];
+        getChipId(dev_code);
+
+#ifdef __DEBUG__
+        for(int i=0; i<2; i++)
+            printf("dev code %d: %02x\n", i, dev_code[i]);
+#endif
+
+      // Sanyo
+      if(dev_code[0]== 0x62 && dev_code[1] == 0x13){
+        return 128;
+      }
+      // Macronix
+      else if(dev_code[0]== 0xc2 && dev_code[1] == 0x09){
+        return 128;
+      }
+      return -1;
+    }
+
+    // to do
+  int32_t load(uint32_t badd, uint8_t *dat, uint32_t len){
+    for(int i=0; i<len; i++){
+
+      // バンク切り替え
+      if( ((badd + i) / 0x10000) != bank_num){
+        switchBank((badd + i) / 0x10000);
+      }
+
+      read(badd + i, &dat[i]);
+      if(i%0x800==0)
+          draw_progress(  i * 100 / len  );
+    }
+    draw_progress(100);
+    return len;
+  }
+
+  // to do
+  int32_t save(uint32_t badd, uint8_t *dat, uint32_t len){
+      uint8_t tmp;
+      uint32_t time_over = 10;
+      for(int i=0; i<len; i++){
+
+        // バンク切り替え
+        if( ((badd + i) / 0x10000) != bank_num){
+          switchBank((badd + i) / 0x10000);
+        }
+
+        write(0x5555, 0xaa);
+        write(0x2aaa, 0x55);
+        write(0x5555, 0xa0);
+        write(badd + i, dat[i]);
+
+        while(time_over--){
+          delayMicroseconds(20);
+          read(badd + i, &tmp);
+          if( dat[i] == tmp)
+            break;
+        }
+        if(i%0x800==0)
+          draw_progress( i * 100 / len  );
+      }
+      draw_progress(100);
+      // command reset
+      write(0x0000, 0x00f0);
+  }
+
+
+  void switchBank(uint32_t num){
+    write(0x5555, 0xaa);
+    write(0x2aaa, 0x55);
+    write(0x5555, 0xB0);
+    write(0x5555, 0xaa);
+    write(0x0000, num);
+  }
+
+};
+
+
 
 Memory* Memory::create(MEMORY_SELECT ms)
 {
@@ -910,6 +994,10 @@ Memory* Memory::create(MEMORY_SELECT ms)
     else if((size = MemoryBackupFlash::find()) > 0){
       return (Memory *)new MemoryBackupFlash(size);
     }
+    else if((size = MemoryBackupFlashLarge::find()) > 0){
+      return (Memory *)new MemoryBackupFlashLarge(size);
+    }
+
     return nullptr;
   }
   return nullptr;
