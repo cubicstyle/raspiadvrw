@@ -15,10 +15,10 @@
 #define LOGO_CRC 0x2e03
 
 void draw_progress(uint32_t p);
+#define PROGRESS(d,x)  if(d) draw_progress(x);
 
 Memory::Memory()
 {
-
 }
 
 
@@ -32,6 +32,7 @@ class MemoryMaskRom : public MemoryRom{
   public:
   MemoryMaskRom(){
     typstr = (char *)"MASK ROM";
+    memset(&header, 0, sizeof(RomHeader));
   }
     static int32_t find(){
         MemoryRom m;
@@ -134,11 +135,9 @@ class MemoryCubicFlash : public MemoryRom{
             break;
         }
 
-        if(a%0x10000==0){
-          draw_progress( 100 - (rl * 100 / len)  );
-        }
+        PROGRESS( a%0x10000==0, 100 - (rl * 100 / len) );
       }
-      draw_progress( 100 );      
+      PROGRESS(true, 100);   
       return 1;
     }
 
@@ -495,10 +494,7 @@ class MemoryF2aFlash : public MemoryRom{
 
           waitWriteReady(a);
 
-          if(a%0x10000==0){
-              //printf("write:%06x\n",a);
-              draw_progress( 100 - ((rl / len) * 100)  );
-          }
+        PROGRESS( a%0x10000==0, 100 - (rl * 100 / len) );
       }
       draw_progress( 100 );
 
@@ -555,6 +551,15 @@ int32_t MemoryRom::write(uint32_t wadd, uint16_t dat)
   return 1;
 }
 
+int32_t MemoryRom::getGbaHeader()
+{
+    uint16_t *buffer = (uint16_t *)&header;
+    // READ GBA HEADER
+    for(int i=0; i<192/2; i++)
+      read(i, &buffer[i]);
+    return 1;
+}
+
 int32_t MemoryRom::checkGbaHeader()
 {
     uint16_t *buffer = new uint16_t[192/2];
@@ -600,8 +605,7 @@ int32_t MemoryBackup::write(uint32_t badd, uint8_t dat)
 int32_t MemoryBackup::load(uint32_t badd, uint8_t *dat, uint32_t len){
   for(int i=0; i<len; i++){
     read(badd + i, &dat[i]);
-    if(i%0x800==0)
-        draw_progress(  i * 100 / len  );
+    PROGRESS( i%0x100==0, i * 100 / len );
   }
   draw_progress(100);
   return len;
@@ -618,7 +622,7 @@ class MemoryBackupSram : public MemoryBackup{
     MemoryBackupSram(){
       kbyte = 32;
       typstr = (char *)"Sram(Fram)";
-      type = SRAM;
+      type = BACKUP_SRAM;
     }
 	static int32_t find(){
     MemoryBackup m;
@@ -641,8 +645,7 @@ class MemoryBackupSram : public MemoryBackup{
   int32_t save(uint32_t badd, uint8_t *dat, uint32_t len){
       for(int i=0; i<len; i++){
         write(badd + i, dat[i]);
-        if(i%0x800==0)
-            draw_progress(  i * 100 / len  );
+        PROGRESS( i%0x100==0, i * 100 / len );
       }
       draw_progress( 100 );
       return len;
@@ -675,7 +678,7 @@ class MemoryBackupCubic : public MemoryBackup{
     MemoryBackupCubic(uint32_t backup_size){
       kbyte = backup_size;
       typstr = (char *)"Cubic Flash";
-      type = FLASH_CUBIC;
+      type = BACKUP_FLASH_CUBIC;
     }
 
     static int32_t getChipId(uint8_t *code){
@@ -707,13 +710,13 @@ class MemoryBackupCubic : public MemoryBackup{
 #endif
 
       if(dev_code[0]== 0xbf && (dev_code[1] == 0xd7 || dev_code[1] == 0xd6)){
-        return 32;
+        return 64;
       }
       return -1;
   	}
   int32_t save(uint32_t badd, uint8_t *dat, uint32_t len){
       uint8_t tmp;
-      uint32_t time_over = 5;
+      int32_t time_over = 5;
       for(int i=0; i<len; i++){
         write(0x5555, 0xaa);
         write(0x2aaa, 0x55);
@@ -726,8 +729,7 @@ class MemoryBackupCubic : public MemoryBackup{
           if( dat[i] ==  tmp)
             break;
         }
-        if(i%0x800==0)
-            draw_progress( i * 100 / len  );
+        PROGRESS( i%0x100==0, i * 100 / len );
       }
       draw_progress( 100 );
       // command reset
@@ -737,7 +739,7 @@ class MemoryBackupCubic : public MemoryBackup{
 
   int32_t chipErase(){
       uint8_t tmp;
-      uint32_t time_over = 5;
+      int32_t time_over = 5;
       write(0x5555, 0xaa);
       write(0x2aaa, 0x55);
       write(0x5555, 0x80);
@@ -762,7 +764,7 @@ class MemoryBackupFlash : public MemoryBackup{
     MemoryBackupFlash(uint32_t backup_size){
       kbyte = backup_size;
       typstr = (char *)"Flash";
-      type = FLASH;
+      type = BACKUP_FLASH;
     }
 
     static int32_t getChipId(uint8_t *code){
@@ -811,7 +813,7 @@ class MemoryBackupFlash : public MemoryBackup{
 
   int32_t save(uint32_t badd, uint8_t *dat, uint32_t len){
       uint8_t tmp;
-      uint32_t time_over = 10;
+      int32_t time_over = 10;
       for(int i=0; i<len; i++){
         write(0x5555, 0xaa);
         write(0x2aaa, 0x55);
@@ -824,8 +826,7 @@ class MemoryBackupFlash : public MemoryBackup{
           if( dat[i] == tmp)
             break;
         }
-        if(i%0x800==0)
-          draw_progress( i * 100 / len  );
+        PROGRESS( i%0x100==0, i * 100 / len );
       }
       draw_progress(100);
       // command reset
@@ -834,7 +835,7 @@ class MemoryBackupFlash : public MemoryBackup{
 
   int32_t chipErase(){
       uint8_t tmp;
-      uint32_t time_over = 5;
+      int32_t time_over = 5;
       write(0x5555, 0xaa);
       write(0x2aaa, 0x55);
       write(0x5555, 0x80);
@@ -886,7 +887,7 @@ class MemoryBackupFlashLarge : public MemoryBackupFlash{
     MemoryBackupFlashLarge(uint32_t backup_size) : MemoryBackupFlash (backup_size){
     }
 
-    int32_t bank_num=0;
+    int32_t bank_num = -1;
 
     static int32_t find(){
         uint8_t dev_code[2];
@@ -913,13 +914,11 @@ class MemoryBackupFlashLarge : public MemoryBackupFlash{
     for(int i=0; i<len; i++){
 
       // バンク切り替え
-      if( ((badd + i) / 0x10000) != bank_num){
+      if( ((badd + i) / 0x10000) != bank_num)
         switchBank((badd + i) / 0x10000);
-      }
 
       read(badd + i, &dat[i]);
-      if(i%0x800==0)
-          draw_progress(  i * 100 / len  );
+      PROGRESS( i%0x100==0, i * 100 / len );
     }
     draw_progress(100);
     return len;
@@ -928,12 +927,13 @@ class MemoryBackupFlashLarge : public MemoryBackupFlash{
   // to do
   int32_t save(uint32_t badd, uint8_t *dat, uint32_t len){
       uint8_t tmp;
-      uint32_t time_over = 10;
+      int32_t time_over = 10;     
       for(int i=0; i<len; i++){
 
         // バンク切り替え
         if( ((badd + i) / 0x10000) != bank_num){
           switchBank((badd + i) / 0x10000);
+          delayMicroseconds(20);
         }
 
         write(0x5555, 0xaa);
@@ -941,14 +941,14 @@ class MemoryBackupFlashLarge : public MemoryBackupFlash{
         write(0x5555, 0xa0);
         write(badd + i, dat[i]);
 
-        while(time_over--){
+        while(time_over){
           delayMicroseconds(20);
           read(badd + i, &tmp);
           if( dat[i] == tmp)
             break;
+          time_over--;
         }
-        if(i%0x800==0)
-          draw_progress( i * 100 / len  );
+        PROGRESS( i%0x100==0, i * 100 / len );
       }
       draw_progress(100);
       // command reset
@@ -960,13 +960,11 @@ class MemoryBackupFlashLarge : public MemoryBackupFlash{
     write(0x5555, 0xaa);
     write(0x2aaa, 0x55);
     write(0x5555, 0xB0);
-    write(0x5555, 0xaa);
     write(0x0000, num);
+    bank_num = num;
   }
 
 };
-
-
 
 Memory* Memory::create(MEMORY_SELECT ms)
 {

@@ -25,7 +25,7 @@
 using namespace std;
 
 enum MODE { NONE, READ, WRITE, INFO, BLOCK_ERASE, DUMP,
-	CHIP_ERASE, DUPLICATE, VERIFY, BLANK, TEST };
+	CHIP_ERASE, DUPLICATE, VERIFY, BLANK, TEST, TEST2 };
 
 #define LOGO_CRC 0x2e03
 
@@ -44,17 +44,19 @@ void print_version(){
 
 void print_help(){
 	printf("rpa [-w gbarom] [-r dstfile] [-l size] [-L size(MB)]-c [-a address]\n");
+	printf("\t-s \t\t\tBackup memory mode (Sram, Fram, Flash, ...Not yet supported EEPROM)\n\n");
+
 	printf("\t-c \t\t\tROM info\n");
-	printf("\t-r <filename> \t\tRead ROM\n");
-	printf("\t-w <filename> \t\tWrite ROM\n");
+	printf("\t-r <filename> \t\tRead ROM(or backup memory)\n");
+	printf("\t-w <filename> \t\tWrite ROM(or backup memory)\n");
 	printf("\t-e \t\t\tblock erase\n");
 	printf("\t-E \t\t\tchip erase\n");	  
-	printf("\t-B \t\t\tBLANK check\n");
+	printf("\t-B \t\t\tblank check\n");
 	printf("\t-d \t\t\tdump\n");
+
 	printf("\t-a \t\t\trom address\n");
 	printf("\t-b \t\t\tblock address\n");
 	printf("\t-n \t\t\terase block num\n");
-	printf("\t-s \t\t\tSRAM(backup rom)\n");
 	printf("\t-h \t\t\tthis help\n\n");
 }
 
@@ -89,7 +91,7 @@ void draw_progress(uint32_t p) {	// p:0-100
 }
 
 int main(int argc,char *argv[]) {
-	int32_t i,j, n, len, mode, code, word_count, result, addr, block, block_num, ret;
+	int32_t i,j, n, len, mode, code, word_count, result, addr, block, block_num, ret, filesize;
 	unsigned short int dat, dat1, dat2;
 
 	bool backup;
@@ -162,6 +164,7 @@ int main(int argc,char *argv[]) {
 							printf("file fstat error!!\n");
 							exit(EXIT_FAILURE);
 						}
+						filesize = stbuf.st_size;
 						break;
 
 					case 'L':
@@ -206,8 +209,12 @@ int main(int argc,char *argv[]) {
 						mode = BLANK;
 						break;
 
-					case 'T': // DEBUG TEST 
+					case 'T': // TEST 
 						mode = TEST;
+						break;
+
+					case '@': // TEST2
+						mode = TEST2;
 						break;
 
 					case 'h':
@@ -252,7 +259,7 @@ int main(int argc,char *argv[]) {
 
 	if(!backup)
 	{
-		printf("Main ROM mode=>\n");
+		printf("Main ROM mode =>\n");
 		MemoryRom *m = (MemoryRom *)Memory::create();
 		if(m == nullptr){
 			printf("cartridge can not be detected or not supported.\n");
@@ -274,9 +281,16 @@ int main(int argc,char *argv[]) {
 		}
 
 		if(mode == INFO){
-			printf("Cartridge type: %s\n", m->getTypeStr());
+			printf("  Cartridge type:  %s\n", m->getTypeStr());
 			if(m->getMemoryMbit() > 0)
-				printf("Size: %d Mbit\n", m->getMemoryMbit());
+				printf("  Size:            %d Mbit\n", m->getMemoryMbit());
+			if(m->checkGbaHeader() > 0){
+				m->getGbaHeader();
+				uint8_t title[13];
+				memset(title, 0, 13);
+				strncpy((char *)title, (char *)m->header.game_title, 12);
+				printf("  Game title:      %s\n",title);
+			}
 		}
 
 		else if(mode == READ){
@@ -444,14 +458,14 @@ int main(int argc,char *argv[]) {
 		}
 	}
 	else if(backup){
-		printf("Backup memory mode=>\n");
+		printf("Backup memory mode =>\n");
 		MemoryBackup *b = (MemoryBackup *)Memory::create(MEM_BACKUP);
 		if(b == nullptr){
 			printf("cartridge can not be detected or not supported.\n");
 			exit(1);
 		}
-		printf("Memory type: %s\n", b->getTypeStr());
-		printf("Size: %d KB\n", b->getMemoryKb());
+		printf("  Memory type:  %s\n", b->getTypeStr());
+		printf("  Size:         %d KB\n", b->getMemoryKb());
 
 		try{
 			len = b->getMemoryKb() * 1024;
@@ -474,7 +488,7 @@ int main(int argc,char *argv[]) {
 			}
 		}
 		else if(mode == READ){
-			printf("READ START=>\n");
+			printf("READ START =>\n");
 			uint8_t *buf = (uint8_t *)buffer;
 			b->load(0, buf, len);
 			write(fd, buf, len);
@@ -483,11 +497,12 @@ int main(int argc,char *argv[]) {
 			printf("read finish\n"); 
 		}
 		else if(mode == WRITE){
-			printf("WRITE START=>\n");
+			printf("WRITE START =>\n");
 			uint8_t *buf = (uint8_t *)buffer;
+			if(filesize > len)
+				printf("WARNING: file size is over %d ( > %d )\n", filesize, len);
 			len = fread( buf, sizeof( unsigned char ), len, fp );
 			//printf("\nfread : %d\n",len);
-			printf("WRITE START =>\n");
 			b->save(0, buf, len);
 			printf("write finish!\n");
 		}
@@ -495,6 +510,19 @@ int main(int argc,char *argv[]) {
 			printf("CHIP ERASE START =>\n");
 			ret = b->chipErase();
 			printf("chip erase finish!(%d)\n",ret);
+		}
+		else if(mode == BLANK){
+			printf("BLANK CHECK=>\n");
+			int32_t error=0;
+			uint8_t *buf = (uint8_t *)buffer;
+			b->load(0, buf, len);
+			for(i=0; i<len; i++){
+				if(buf[i] != 0xff){
+					if(error++ < 32)
+						printf("%04x: %02x != 0xff\n", i , buf[i]);
+				}
+			}
+			printf("BLANK error:%d\n", error);
 		}
 		else if(mode == TEST)
 		{
@@ -515,9 +543,9 @@ int main(int argc,char *argv[]) {
 				goto end;
 
 			// WRITE TEST 0xAA
-			for(i=0; i<len; i++)
-				buf[i] = 0xaa;
+			memset(buf, 0xaa, len);
 			b->save(0, buf, len);
+
 			for(i=0; i<len; i++){
 				if(buf[i] != 0xaa){
 					if(error++ < 32)
@@ -531,9 +559,9 @@ int main(int argc,char *argv[]) {
 
 			// WRITE TEST 0x55
 			b->chipErase();
-			for(i=0; i<len; i++)
-				buf[i] = 0x55;
+			memset(buf, 0x55, len);
 			b->save(0, buf, len);
+
 			for(i=0; i<len; i++){
 				if(buf[i] != 0x55){
 					if(error++ < 32)
@@ -547,6 +575,30 @@ int main(int argc,char *argv[]) {
 			b->chipErase();
 
 			printf("BACKUP MEMOEY TEST is Sucess\n");
+		}
+		else if(mode == TEST2)
+		{
+			printf("BACKUP MEMORY TEST2 START=>\n");
+			int32_t error=0;
+			uint8_t *buf = (uint8_t *)buffer;
+			// ERASE TEST
+			b->chipErase();
+			b->load(0, buf, len);
+			for(i=0; i<len; i++){
+				if(buf[i] != 0xff){
+					if(error++ < 32)
+						printf("%04x: %02x != 0xff\n", i , buf[i]);
+				}
+			}
+			printf("BLANK TEST error:%d\n", error);
+			if(error > 0)
+				goto end;
+
+			// WRITE TEST
+			memset(buf, 0x31, len);
+			b->save(0, buf, len/2);
+			memset(buf, 0x32, len);
+			b->save(len/2, buf, len/2);
 		}
 	}
 

@@ -35,11 +35,17 @@ class Memory{
         */
 };
 
+enum ERomType{
+    ROM_NONE, ROM_MASK, ROM_FLASH, ROM_FLASH_CUBIC
+};
+
 // MainROMの基底クラス
 class MemoryRom : public Memory{
     protected:
         uint32_t mbit;  //memory size Mbit
         char* typstr;
+        ERomType type;
+
     public:
         RomHeader header;
         //virtual bool getHeader();
@@ -60,6 +66,7 @@ class MemoryRom : public Memory{
             return -1;
         };
         virtual int32_t checkGbaHeader();
+        virtual int32_t getGbaHeader();
 
         char * getTypeStr(){
             return typstr;
@@ -87,7 +94,7 @@ class MemoryRom : public Memory{
 };
 
 enum EBackupType{
-    BACKUP_NONE, SRAM, FLASH, FLASH_LARGE, EEPROM, FLASH_CUBIC
+    BACKUP_NONE, BACKUP_SRAM, BACKUP_FLASH, BACKUP_FLASH_LARGE, BACKUP_EEPROM, BACKUP_FLASH_CUBIC
 };
 
 // BackupROMの基底クラス
