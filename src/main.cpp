@@ -141,8 +141,9 @@ int main(int argc,char *argv[]) {
 							printf("file fstat error!!\n");
 							exit(EXIT_FAILURE);
 						}
+						filesize = stbuf.st_size;
 						if(len==0)
-							len = stbuf.st_size;
+							len = filesize;
 						break;
 
 					case 'r': // ROM 読み込んでファイルに書き込み
@@ -164,7 +165,6 @@ int main(int argc,char *argv[]) {
 							printf("file fstat error!!\n");
 							exit(EXIT_FAILURE);
 						}
-						filesize = stbuf.st_size;
 						break;
 
 					case 'L':
@@ -501,8 +501,21 @@ int main(int argc,char *argv[]) {
 			uint8_t *buf = (uint8_t *)buffer;
 			if(filesize > len)
 				printf("WARNING: file size is over %d ( > %d )\n", filesize, len);
+
+			EBackupType backup_type = b->getType();
+			if( backup_type >= BACKUP_FLASH && backup_type <= BACKUP_FLASH_CUBIC){
+				printf("Blank check...\n");
+				b->load(0, buf, len);
+				for(i=0; i<len; i++){
+					if(buf[i] != 0xff){
+						printf("WARNING: backup flash is not blank! Execute memory erase.\n");
+						b->chipErase();
+						break;
+					}
+				}
+			}
+
 			len = fread( buf, sizeof( unsigned char ), len, fp );
-			//printf("\nfread : %d\n",len);
 			b->save(0, buf, len);
 			printf("write finish!\n");
 		}

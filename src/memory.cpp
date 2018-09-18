@@ -723,11 +723,12 @@ class MemoryBackupCubic : public MemoryBackup{
         write(0x5555, 0xa0);
         write(badd + i, dat[i]);
 
-        while(time_over--){
+        while(time_over){
           delayMicroseconds(20); // Byte-Program Time max:20us
           read(badd + i, &tmp);
           if( dat[i] ==  tmp)
             break;
+          time_over--;
         }
         PROGRESS( i%0x100==0, i * 100 / len );
       }
@@ -747,11 +748,12 @@ class MemoryBackupCubic : public MemoryBackup{
       write(0x2aaa, 0x55);
       write(0x5555, 0x10);
 
-      while(time_over--){
+      while(time_over){
           delay(100);
           read(0x00, &tmp);
           if( 0xff ==  tmp)
             break;
+          time_over--;
       }
 
       return 1;
@@ -820,11 +822,12 @@ class MemoryBackupFlash : public MemoryBackup{
         write(0x5555, 0xa0);
         write(badd + i, dat[i]);
 
-        while(time_over--){
+        while(time_over){
           delayMicroseconds(20);
           read(badd + i, &tmp);
           if( dat[i] == tmp)
             break;
+          time_over--;
         }
         PROGRESS( i%0x100==0, i * 100 / len );
       }
@@ -843,11 +846,12 @@ class MemoryBackupFlash : public MemoryBackup{
       write(0x2aaa, 0x55);
       write(0x5555, 0x10);
 
-      while(time_over--){
+      while(time_over){
           delay(200);
           read(0x00, &tmp);
           if( 0xff ==  tmp)
             break;
+          time_over--;
       }
 
       return 1;
@@ -858,6 +862,7 @@ class MemoryBackupFlash : public MemoryBackup{
 class MemoryBackupFlashAtmel : public MemoryBackupFlash{
     public:
     MemoryBackupFlashAtmel(uint32_t backup_size) : MemoryBackupFlash (backup_size){
+      typstr = (char *)"Flash(Atmel)";
     }
 
     static int32_t find(){
@@ -877,9 +882,30 @@ class MemoryBackupFlashAtmel : public MemoryBackupFlash{
       return -1;
     }
 
-  int32_t chipErase(){
-      return -1;
+  int32_t save(uint32_t badd, uint8_t *dat, uint32_t len){
+      uint8_t tmp;
+      int32_t time_over = 10;
+      for(int i=0; i<len; i++){
+        write(0x5555, 0xaa);
+        write(0x2aaa, 0x55);
+        write(0x5555, 0xa0);
+        for(int j=0; i<len && j<128; j++, i++)
+          write(badd + i , dat[i]);
+    
+        while(time_over){
+          delayMicroseconds(20);
+          read(badd + (i-1), &tmp);
+          if( dat[i-1] == tmp)
+            break;
+          time_over--;
+        }
+        PROGRESS( i%0x80==0, i * 100 / len );
+      }
+      draw_progress(100);
+      // command reset
+      write(0x0000, 0x00f0);
   }
+
 };
 
 class MemoryBackupFlashLarge : public MemoryBackupFlash{
