@@ -100,6 +100,12 @@ class MemoryCubicFlash : public MemoryRom{
             && dev_code[2] == 0x221a && dev_code[3] == 0x2200){
         return 32;
       }
+      // MT28EW256ABA
+      else if((dev_code[0] & 0xff) == 0x89 && dev_code[1] == 0x227E 
+            && dev_code[2] == 0x2222 && dev_code[3] == 0x2201){
+        return 256;
+      }
+
 
       else
         return -1;
