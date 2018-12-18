@@ -20,7 +20,7 @@
 #include "gpio.h"
 #include "memory.h"
 
-#define VERSION "1.11"
+#define VERSION "1.12"
 
 using namespace std;
 
@@ -38,7 +38,7 @@ void exit_func2(){
 }
 
 void print_version(){
-	printf("Raspberry Pi ADVANCE Reader Writer v.%s\n",VERSION);
+	printf("Raspberry Pi ADVANCE Reader Writer v%s\n",VERSION);
 	printf("Copyright (C) 2018 CUBIC STYLE\n\n");
 }
 
@@ -233,8 +233,9 @@ int main(int argc,char *argv[]) {
 		}
 	}
 
+	print_version();
+
 	if ( mode == NONE ) {
-		print_version();
 		print_help();
 
 		mode = INFO;
