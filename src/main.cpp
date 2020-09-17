@@ -25,7 +25,7 @@
 #include "gpio.h"
 #include "memory.h"
 
-#define VERSION "1.12"
+#define VERSION "1.13"
 
 using namespace std;
 
@@ -49,20 +49,20 @@ void print_version(){
 
 void print_help(){
 	printf("rpa [-w gbarom] [-r dstfile] [-l size] [-L size(MB)]-c [-a address]\n");
-	printf("\t-s \t\t\tBackup memory mode (Sram, Fram, Flash, ...Not yet supported EEPROM)\n\n");
+	printf("  -s \t\t\tBackup memory mode (Sram, Fram, Flash, ...Not yet supported EEPROM)\n\n");
 
-	printf("\t-c \t\t\tROM info\n");
-	printf("\t-r <filename> \t\tRead ROM(or backup memory)\n");
-	printf("\t-w <filename> \t\tWrite ROM(or backup memory)\n");
-	printf("\t-e \t\t\tblock erase\n");
-	printf("\t-E \t\t\tchip erase\n");	  
-	printf("\t-B \t\t\tblank check\n");
-	printf("\t-d \t\t\tdump\n");
+	printf("  -c \t\t\tROM info\n");
+	printf("  -r <filename> \tRead ROM(or backup memory)\n");
+	printf("  -w <filename> \tWrite ROM(or backup memory)\n");
+	printf("  -e \t\t\tblock erase\n");
+	printf("  -E \t\t\tchip erase\n");	  
+	printf("  -B \t\t\tblank check\n");
+	printf("  -d \t\t\tdump\n");
 
-	printf("\t-a \t\t\trom address\n");
-	printf("\t-b \t\t\tblock address\n");
-	printf("\t-n \t\t\terase block num\n");
-	printf("\t-h \t\t\tthis help\n\n");
+	printf("  -a \t\t\trom address\n");
+	printf("  -b \t\t\tblock address\n");
+	printf("  -n \t\t\terase block num\n");
+	printf("  -h \t\t\tthis help\n\n");
 }
 
 bool nl_flag = false;

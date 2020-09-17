@@ -73,6 +73,7 @@ class MemoryCubicFlash : public MemoryRom{
 
       // command reset
       m.write(0x0000, 0x00f0);
+
       return 4;
     }
 
@@ -85,6 +86,7 @@ class MemoryCubicFlash : public MemoryRom{
         printf("dev code %d: %04x\n", i, dev_code[i]);
       }
 #endif
+
       // mx29gl256
       if((dev_code[0] & 0xff) == 0xC2 && dev_code[1] == 0x227E 
             && dev_code[2] == 0x2222 && dev_code[3] == 0x2201){
@@ -100,12 +102,26 @@ class MemoryCubicFlash : public MemoryRom{
             && dev_code[2] == 0x221a && dev_code[3] == 0x2200){
         return 32;
       }
+      // S29GL064
+      else if((dev_code[0] & 0xff) == 0x01 && dev_code[1] == 0x227E 
+            && dev_code[2] == 0x220c && dev_code[3] == 0x2201){
+        return 64;
+      }
       // MT28EW256ABA
       else if((dev_code[0] & 0xff) == 0x89 && dev_code[1] == 0x227E 
             && dev_code[2] == 0x2222 && dev_code[3] == 0x2201){
         return 256;
       }
-
+      // MT28EW128ABA
+      else if((dev_code[0] & 0xff) == 0x89 && dev_code[1] == 0x227E 
+            && dev_code[2] == 0x2221 && dev_code[3] == 0x2201){
+        return 128;
+      }
+      // Intel
+      else if((dev_code[0] & 0xff) == 0x8a && dev_code[1] == 0x8902){ 
+        return 128;
+      }
+      
 
       else
         return -1;
@@ -721,7 +737,7 @@ class MemoryBackupCubic : public MemoryBackup{
             printf("dev code %d: %02x\n", i, dev_code[i]);
 #endif
 
-      if(dev_code[0]== 0xbf && (dev_code[1] == 0xd7 || dev_code[1] == 0xd6)){
+      if(dev_code[0]== 0xbf && (dev_code[1] == 0xd7 || dev_code[1] == 0xd6 || dev_code[1] == 0xd5)){
         return 64;
       }
       return -1;
