@@ -59,6 +59,8 @@ class MemoryCubicFlash : public MemoryRom{
       typstr = (char *)"Cubic Flash Cartridge";
     }
 
+    FlashMemoryInfo info;
+
     static int32_t getChipId(uint16_t *code){
       MemoryRom m;
       m.write(0x0555, 0x00aa);
@@ -77,15 +79,87 @@ class MemoryCubicFlash : public MemoryRom{
       return 4;
     }
 
-    static int32_t find(){
+    static void setFlashMemoryInfo(FlashMemoryInfo* info, uint16_t *dev_code){
+      if(info == NULL)
+        return;
+
+      info->manufacturer_id = dev_code[0];
+      info->deveice_id[0] = dev_code[1];
+      info->deveice_id[1] = dev_code[2];
+      info->deveice_id[2] = dev_code[3];
+
+
+      // mx29gl256
+      if((dev_code[0] & 0xff) == 0xC2 && dev_code[1] == 0x227E 
+            && dev_code[2] == 0x2222 && dev_code[3] == 0x2201){
+        info->mbit =  256;
+        info->sector_size = 0x10000;     // 64K Word
+        info->sector_mask = 0xFFFF0000;
+        strcpy(info->device_name, "MX29GL256F");
+      }
+      // m29w128
+      else if((dev_code[0] & 0xff) == 0x20 && dev_code[1] == 0x227E 
+            && dev_code[2] == 0x2221 && dev_code[3] == 0x2200){
+        info->mbit =  128;
+        info->sector_size = 0x10000;     // 64K Word
+        info->sector_mask = 0xFFFF0000;
+        strcpy(info->device_name, "M29W128G");
+      }
+      // S29GL032
+      else if((dev_code[0] & 0xff) == 0x01 && dev_code[1] == 0x227E 
+            && dev_code[2] == 0x221a && dev_code[3] == 0x2200){
+        info->mbit =  32;
+        info->sector_size = 0x8000;     // 32K Word
+        info->sector_mask = 0xFFFF8000;
+        strcpy(info->device_name, "S29GL032");
+      }
+      // S29GL064
+      else if((dev_code[0] & 0xff) == 0x01 && dev_code[1] == 0x227E 
+            && dev_code[2] == 0x220c && dev_code[3] == 0x2201){
+        info->mbit =  64;
+        info->sector_size = 0x8000;     // 32K Word
+        info->sector_mask = 0xFFFF8000;
+        strcpy(info->device_name, "S29GL064");
+      }
+      // MT28EW256ABA
+      else if((dev_code[0] & 0xff) == 0x89 && dev_code[1] == 0x227E 
+            && dev_code[2] == 0x2222 && dev_code[3] == 0x2201){
+        info->mbit =  256;
+        info->sector_size = 0x10000;     // 64K Word
+        info->sector_mask = 0xFFFF0000;
+        strcpy(info->device_name, "MT28EW256");
+      }
+      // MT28EW128ABA
+      else if((dev_code[0] & 0xff) == 0x89 && dev_code[1] == 0x227E 
+            && dev_code[2] == 0x2221 && dev_code[3] == 0x2201){
+        info->mbit =  128;
+        info->sector_size = 0x10000;     // 64K Word
+        info->sector_mask = 0xFFFF0000;
+        strcpy(info->device_name, "MT28EW128");
+      }
+
+#ifdef __DEBUG__
+      printf("\nFlash Memory Info=>\n");
+      printf("  Density : %d MBit\n", info->mbit);
+      printf("  manufacturer id: %04x\n", info->manufacturer_id );
+      printf("  deveice id 1: %04x\n", info->deveice_id[0] );
+      printf("             2: %04x\n", info->deveice_id[1] );
+      printf("             3: %04x\n", info->deveice_id[2] );
+      printf("\n");
+#endif
+
+    }
+
+
+    static int32_t find(FlashMemoryInfo* info = NULL){
       uint16_t dev_code[4];
       getChipId(dev_code);
-
 #ifdef __DEBUG__
       for(int i=0; i<4; i++) {
         printf("dev code %d: %04x\n", i, dev_code[i]);
       }
 #endif
+      setFlashMemoryInfo(info, dev_code);
 
       // mx29gl256
       if((dev_code[0] & 0xff) == 0xC2 && dev_code[1] == 0x227E 
@@ -122,7 +196,6 @@ class MemoryCubicFlash : public MemoryRom{
         return 128;
       }
       
-
       else
         return -1;
     }
@@ -130,27 +203,30 @@ class MemoryCubicFlash : public MemoryRom{
     int32_t seqProgram(uint32_t wadd, uint16_t *dat, uint32_t len){
       const uint32_t buffer_size = 32;
 
-      uint32_t sa = wadd & 0xffff0000, a = wadd;
+      uint32_t sa = wadd & info.sector_mask, a = wadd;
       uint32_t i = 0, wl, rl = len;
       uint16_t status, k;
 
       // write buffer programming / 32 word
       while(rl > 0){
         wl = rl > buffer_size ?  buffer_size : rl;
-        if(sa + 0x10000 < a + wl) // cant write across sectors
-          wl = sa + 0x10000 - a;
+        if(sa + info.sector_size < a + wl) // cant write across sectors
+          wl = sa + info.sector_size - a;
 
         write(0x0555, 0x00aa);
         write(0x02aa, 0x0055);
         write(sa    , 0x0025);
         write(sa    , wl - 1);
-        for(int j=0; j<wl; j++)
-          write(a++, dat[i++]);
+        for(int j=0; j<wl; j++){
+          write(a++, dat[i]);
+          i++;
+        }
+
         // confirm
         write(sa,     0x29);
 
         rl-=wl;
-        sa=(a & 0xffff0000);
+        sa=(a & info.sector_mask);
 
         k=0;
         while(1){
@@ -163,11 +239,43 @@ class MemoryCubicFlash : public MemoryRom{
             break;
         }
 
-        PROGRESS( a%0x10000==0, 100 - (rl * 100 / len) );
+        PROGRESS( a % info.sector_size==0, 100 - (rl * 100 / len) );
       }
       PROGRESS(true, 100);   
       return 1;
     }
+
+    int32_t seqProgramWriteCommand(uint32_t wadd, uint16_t *dat, uint32_t len){
+      const uint32_t buffer_size = 32;
+
+      uint32_t sa = wadd & 0xffff0000, a = wadd;
+      uint32_t i = 0, wl, rl = len;
+      uint16_t status, k;
+
+      // write buffer programming / 32 word
+      for(int j=0; j<len; j++){
+        write(0x0555, 0x00aa);
+        write(0x02aa, 0x0055);
+        write(0x0555, 0x00a0);
+        write(a++, dat[i++]);
+
+        k=0;
+        while(1){
+          delayMicroseconds(120); // buffer program typ:120us max:240us S29GL064 max:1200us
+          read(a-1, &status);   
+          //printf("%02x %02x\n", dat[i-1] & 0xff, status & 0xff);
+          if( (dat[i-1]&0x80) == (status&0x80))
+            break;
+          if(k++==15)  // timeout
+            break;
+        }
+
+        PROGRESS( a%0x10000==0, 100 - (a * 100 / len) );
+      }
+      PROGRESS(true, 100);   
+      return 1;
+    }
+
 
     int32_t secErase(uint32_t wadd, uint32_t num){
         for(int32_t n=0; n<num; n++){
@@ -1025,8 +1133,11 @@ Memory* Memory::create(MEMORY_SELECT ms)
   int32_t size;
   // ROMの種類を調べる
   if(ms == MEM_ROM){
-    if((size = MemoryCubicFlash::find()) > 0){
-      return (Memory *)new MemoryCubicFlash(size);
+    FlashMemoryInfo info;
+    if((size = MemoryCubicFlash::find(&info)) > 0){
+      MemoryCubicFlash *m = new MemoryCubicFlash(size);
+      m->info = info;
+      return (Memory *)m;
     }
     if((size = MemoryF2aFlash::find()) > 0 ){
       return (Memory *)new MemoryF2aFlash(size);

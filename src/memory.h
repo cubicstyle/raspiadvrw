@@ -18,6 +18,17 @@ typedef struct
   uint16_t reserve;  // 0x0000
 } RomHeader;
 
+
+typedef struct 
+{
+    uint32_t mbit;  //memory size Mbit
+    uint16_t manufacturer_id;
+    uint16_t deveice_id[3];
+    char device_name[16];
+    uint32_t sector_size; // word size
+    uint32_t sector_mask;
+} FlashMemoryInfo;
+
 // Factory Class
 class Memory{
     private:
@@ -57,6 +68,9 @@ class MemoryRom : public Memory{
             return -1;
         };
         virtual int32_t seqProgram(uint32_t wadd, uint16_t *dat, uint32_t len){
+            return -1;
+        };
+        virtual int32_t seqProgramWriteCommand(uint32_t wadd, uint16_t *dat, uint32_t len){
             return -1;
         };
         virtual int32_t secErase(uint32_t wadd, uint32_t num){
