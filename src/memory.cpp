@@ -31,6 +31,7 @@ Memory::~Memory()
 class MemoryMaskRom : public MemoryRom{
   public:
   MemoryMaskRom(){
+    type = ROM_MASK;
     typstr = (char *)"MASK ROM";
     memset(&header, 0, sizeof(RomHeader));
   }
@@ -51,11 +52,11 @@ class MemoryMaskRom : public MemoryRom{
 };
 
 
-// mx29gl256 or m29w128
 class MemoryCubicFlash : public MemoryRom{
   public:
     MemoryCubicFlash(uint32_t rom_size){
       mbit = rom_size;
+      type = ROM_FLASH_CUBIC;
       typstr = (char *)"Cubic Flash Cartridge";
     }
 
@@ -198,6 +199,10 @@ class MemoryCubicFlash : public MemoryRom{
       
       else
         return -1;
+    }
+
+    char *getDeviceName(){
+      return info.device_name;
     }
 
     int32_t seqProgram(uint32_t wadd, uint16_t *dat, uint32_t len){

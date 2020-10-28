@@ -25,7 +25,7 @@
 #include "gpio.h"
 #include "memory.h"
 
-#define VERSION "1.15"
+#define VERSION "1.16"
 
 using namespace std;
 
@@ -63,6 +63,21 @@ void print_help(){
 	printf("  -b \t\t\tblock address\n");
 	printf("  -n \t\t\terase block num\n");
 	printf("  -h \t\t\tthis help\n\n");
+}
+
+void print_cartinfo(MemoryRom* m){		
+	printf("  Cartridge type:  %s\n", m->getTypeStr());
+	if(m->getMemoryMbit() > 0)
+		printf("  Size:            %d Mbit\n", m->getMemoryMbit());
+	if(m->getType() == ROM_FLASH_CUBIC)
+		printf("  Device:          %s\n", m->getDeviceName());
+	if(m->checkGbaHeader() > 0){
+		m->getGbaHeader();
+		uint8_t title[13];
+		memset(title, 0, 13);
+		strncpy((char *)title, (char *)m->header.game_title, 12);
+		printf("  Game title:      %s\n",title);
+	}
 }
 
 bool nl_flag = false;
@@ -242,7 +257,6 @@ int main(int argc,char *argv[]) {
 
 	if ( mode == NONE ) {
 		print_help();
-
 		mode = INFO;
 	}
 
@@ -287,18 +301,8 @@ int main(int argc,char *argv[]) {
 		}
 
 		if(mode == INFO){
-			printf("  Cartridge type:  %s\n", m->getTypeStr());
-			if(m->getMemoryMbit() > 0)
-				printf("  Size:            %d Mbit\n", m->getMemoryMbit());
-			if(m->checkGbaHeader() > 0){
-				m->getGbaHeader();
-				uint8_t title[13];
-				memset(title, 0, 13);
-				strncpy((char *)title, (char *)m->header.game_title, 12);
-				printf("  Game title:      %s\n",title);
-			}
+			print_cartinfo(m);
 		}
-
 		else if(mode == READ){
 			printf("READ MODE =>\n");
 			m->seqRead(0, (uint16_t *)buffer, len/2);
@@ -350,6 +354,8 @@ int main(int argc,char *argv[]) {
 
 		else if(mode == DUPLICATE)
 		{
+			print_cartinfo(m);
+
 			// ERASE
 			printf("CHIP ERASE START =>\n");
 			ret = m->chipErase();

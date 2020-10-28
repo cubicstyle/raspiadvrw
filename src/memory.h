@@ -82,8 +82,16 @@ class MemoryRom : public Memory{
         virtual int32_t checkGbaHeader();
         virtual int32_t getGbaHeader();
 
+        virtual char * getDeviceName(){
+            return (char *)"\0";
+        };
+
         char * getTypeStr(){
             return typstr;
+        };
+
+        ERomType getType(){
+            return type;
         };
 
         uint32_t getMemoryMbit(){
