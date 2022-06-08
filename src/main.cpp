@@ -25,7 +25,7 @@
 #include "gpio.h"
 #include "memory.h"
 
-#define VERSION "1.16"
+#define VERSION "1.17"
 
 using namespace std;
 
@@ -44,7 +44,7 @@ void exit_func2(){
 
 void print_version(){
 	printf("Raspberry Pi ADVANCE Reader Writer v%s\n",VERSION);
-	printf("Copyright (C) 2020 CUBIC STYLE\n\n");
+	printf("Copyright (C) 2022 CUBIC STYLE\n\n");
 }
 
 void print_help(){
@@ -396,7 +396,11 @@ int main(int argc,char *argv[]) {
 			close(fd);
 			fclose(fp);
 			printf("verify finish!\n");
-			printf("error_num:%d\n",error_num);
+
+			if(error_num==0)
+				printf("DUPLICATE SUCCESS!\n");
+			else
+			  printf("[WARN] error:%d\n",error_num);
 		}
 
 		else if(mode == VERIFY)
@@ -429,7 +433,7 @@ int main(int argc,char *argv[]) {
 			close(fd);
 			fclose(fp);
 			printf("verify finish!\n");
-			printf("error_num:%d\n",error_num);
+			printf("error:%d\n",error_num);
 		}
 
 		else if(mode == BLANK){

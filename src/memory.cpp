@@ -64,6 +64,8 @@ class MemoryCubicFlash : public MemoryRom{
 
     static int32_t getChipId(uint16_t *code){
       MemoryRom m;
+      m.write(0x0000, 0x00F0);
+
       m.write(0x0555, 0x00aa);
       m.write(0x02aa, 0x0055);
       m.write(0x0555, 0x0090);
@@ -75,7 +77,7 @@ class MemoryCubicFlash : public MemoryRom{
       m.read(0x000f, &code[3]);
 
       // command reset
-      m.write(0x0000, 0x00f0);
+      m.write(0x0000, 0x00F0);
 
       return 4;
     }
@@ -88,7 +90,8 @@ class MemoryCubicFlash : public MemoryRom{
       info->deveice_id[0] = dev_code[1];
       info->deveice_id[1] = dev_code[2];
       info->deveice_id[2] = dev_code[3];
-
+      info->write_buffer = 32;
+      info->buff_prg_wait = 120;
 
       // mx29gl256
       if((dev_code[0] & 0xff) == 0xC2 && dev_code[1] == 0x227E 
@@ -112,15 +115,28 @@ class MemoryCubicFlash : public MemoryRom{
         info->mbit =  32;
         info->sector_size = 0x8000;     // 32K Word
         info->sector_mask = 0xFFFF8000;
+        info->write_buffer = 16;
         strcpy(info->device_name, "S29GL032");
       }
-      // S29GL064
+      // S29GL064S
       else if((dev_code[0] & 0xff) == 0x01 && dev_code[1] == 0x227E 
             && dev_code[2] == 0x220c && dev_code[3] == 0x2201){
         info->mbit =  64;
+        info->sector_size = 0x8000;     // 64K Word
+        info->sector_mask = 0xFFFF8000;
+        info->write_buffer = 128;       // Warning: S29GL064N is 16word
+        info->buff_prg_wait = 600;     // 128word: type 300us max 1200us
+        strcpy(info->device_name, "S29GL064S");
+      }
+      // S29GL128N
+      else if((dev_code[0] & 0xff) == 0x01 && dev_code[1] == 0x227E 
+            && dev_code[2] == 0x2221 && dev_code[3] == 0x2201){
+        info->mbit =  128;
         info->sector_size = 0x8000;     // 32K Word
         info->sector_mask = 0xFFFF8000;
-        strcpy(info->device_name, "S29GL064");
+        info->write_buffer = 16;
+        info->buff_prg_wait = 240;
+        strcpy(info->device_name, "S29GL128N");
       }
       // MT28EW256ABA
       else if((dev_code[0] & 0xff) == 0x89 && dev_code[1] == 0x227E 
@@ -182,6 +198,11 @@ class MemoryCubicFlash : public MemoryRom{
             && dev_code[2] == 0x220c && dev_code[3] == 0x2201){
         return 64;
       }
+      // S29GL128
+      else if((dev_code[0] & 0xff) == 0x01 && dev_code[1] == 0x227E 
+            && dev_code[2] == 0x2221 && dev_code[3] == 0x2201){
+        return 128;
+      }
       // MT28EW256ABA
       else if((dev_code[0] & 0xff) == 0x89 && dev_code[1] == 0x227E 
             && dev_code[2] == 0x2222 && dev_code[3] == 0x2201){
@@ -206,15 +227,15 @@ class MemoryCubicFlash : public MemoryRom{
     }
 
     int32_t seqProgram(uint32_t wadd, uint16_t *dat, uint32_t len){
-      const uint32_t buffer_size = 32;
+      //const uint32_t buffer_size = 32;
 
       uint32_t sa = wadd & info.sector_mask, a = wadd;
-      uint32_t i = 0, wl, rl = len;
+      uint32_t i = 0, wl, rl = len, timeout_count = 0;;
       uint16_t status, k;
 
       // write buffer programming / 32 word
       while(rl > 0){
-        wl = rl > buffer_size ?  buffer_size : rl;
+        wl = rl > info.write_buffer ?  info.write_buffer : rl;
         if(sa + info.sector_size < a + wl) // cant write across sectors
           wl = sa + info.sector_size - a;
 
@@ -234,25 +255,30 @@ class MemoryCubicFlash : public MemoryRom{
         sa=(a & info.sector_mask);
 
         k=0;
+        delayMicroseconds( info.buff_prg_wait );
         while(1){
-          delayMicroseconds(120); // buffer program typ:120us max:240us
+          delayMicroseconds( 50 );
           read(a-1, &status);   
           //printf("%02x %02x\n", dat[i-1] & 0xff, status & 0xff);
           if( (dat[i-1]&0x80) == (status&0x80))
             break;
-          if(k++==4)  // timeout
+          if(k++==25){ //timeout
+            timeout_count++;
             break;
+          }
         }
 
         PROGRESS( a % info.sector_size==0, 100 - (rl * 100 / len) );
       }
-      PROGRESS(true, 100);   
+      PROGRESS(true, 100);
+
+      if(timeout_count!=0)
+          printf("[WARN] SEQ PRG timeout : %d\n", timeout_count);
+
       return 1;
     }
 
     int32_t seqProgramWriteCommand(uint32_t wadd, uint16_t *dat, uint32_t len){
-      const uint32_t buffer_size = 32;
-
       uint32_t sa = wadd & 0xffff0000, a = wadd;
       uint32_t i = 0, wl, rl = len;
       uint16_t status, k;

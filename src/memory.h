@@ -27,6 +27,8 @@ typedef struct
     char device_name[16];
     uint32_t sector_size; // word size
     uint32_t sector_mask;
+    uint32_t write_buffer; // word size
+    uint32_t buff_prg_wait;
 } FlashMemoryInfo;
 
 // Factory Class
